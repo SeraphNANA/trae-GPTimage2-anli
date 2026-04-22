@@ -1,0 +1,52 @@
+name: Fetch X Prompts Daily
+
+on:
+  schedule:
+    # UTC 01:10 = Beijing 09:10
+    - cron: "10 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-x-prompts
+  cancel-in-progress: true
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch latest prompts from X
+        env:
+          APIPRO_API_KEY: ${{ secrets.APIPRO_API_KEY }}
+          APIPRO_BASE_URL: http://apipro.maynor1024.live/v1
+          APIPRO_MODEL: grok-4.1-fast
+          # Optional overrides:
+          # APIPRO_QUERY: '(gptimage2 OR gpt-image-2) (prompt OR 提示词)'
+          # APIPRO_LOOKBACK_HOURS: '24'
+          # APIPRO_MAX_ITEMS: '60'
+          APIPRO_OUTPUT_FILE: data/latest-prompts.json
+        run: |
+          python scripts/fetch_x_prompts.py
+
+      - name: Commit and push if changed
+        run: |
+          if git diff --quiet -- data/latest-prompts.json; then
+            echo "No data changes."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/latest-prompts.json
+          git commit -m "chore(data): refresh X prompts ($(date -u +'%Y-%m-%d'))"
+          git push

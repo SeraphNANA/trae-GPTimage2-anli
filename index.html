@@ -105,6 +105,7 @@
     <nav class="top-nav" aria-label="主导航">
         <div class="nav-track">
             <a href="#overview" class="nav-link">导览</a>
+            <a href="#prompt-gallery" class="nav-link">提示词</a>
             <a href="#readme" class="nav-link">完整内容</a>
             <a href="#faq" class="nav-link">FAQ</a>
             <a href="https://github.com/xianyu110/awesome-gptimage2" class="nav-link nav-link-github" target="_blank" rel="noreferrer">GitHub</a>
@@ -128,6 +129,25 @@
                     <p>覆盖常见失败原因、结构化修复策略和可复现优化路径。</p>
                 </article>
             </div>
+        </section>
+
+        <section id="prompt-gallery" class="section prompt-board-section" aria-label="提示词画廊">
+            <div class="prompt-board-head">
+                <h2 class="prompt-board-title">提示词</h2>
+                <div class="prompt-board-head-right">
+                    <label class="prompt-board-search-wrap" for="prompt-board-search">
+                        <span class="prompt-board-search-icon">⌕</span>
+                        <input id="prompt-board-search" class="prompt-board-search" type="search" placeholder="搜索标题/分类/内容">
+                    </label>
+                    <div id="prompt-board-total" class="prompt-board-total">总计：0</div>
+                </div>
+            </div>
+            <div class="prompt-board-filter-row">
+                <div id="prompt-board-filters" class="prompt-board-filters" role="tablist" aria-label="提示词分类"></div>
+                <button id="prompt-board-clear" class="prompt-board-clear" type="button">清空筛选</button>
+            </div>
+            <div id="prompt-board-grid" class="prompt-board-grid"></div>
+            <p id="prompt-board-empty" class="prompt-board-empty" hidden>没有匹配结果，试试更短关键词。</p>
         </section>
 
         <section id="readme" class="section">
@@ -212,10 +232,21 @@
     const readmeRawLinkEl = document.getElementById('readme-raw-link');
     const readmeClockEl = document.getElementById('readme-clock');
     const readmeRetryBtnEl = document.getElementById('readme-retry-btn');
+    const promptBoardFiltersEl = document.getElementById('prompt-board-filters');
+    const promptBoardGridEl = document.getElementById('prompt-board-grid');
+    const promptBoardTotalEl = document.getElementById('prompt-board-total');
+    const promptBoardSearchEl = document.getElementById('prompt-board-search');
+    const promptBoardClearEl = document.getElementById('prompt-board-clear');
+    const promptBoardEmptyEl = document.getElementById('prompt-board-empty');
     const promptFilterEl = document.getElementById('prompt-filter');
     const promptFilterSummaryEl = document.getElementById('prompt-filter-summary');
     const promptFilterButtonsEl = document.getElementById('prompt-filter-buttons');
     const backToTopBtn = document.getElementById('back-to-top');
+    const promptBoardState = {
+        all: [],
+        activeCategory: 'all',
+        keyword: ''
+    };
 
     function setupAnchorScroll() {
         document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
@@ -385,6 +416,230 @@
         return slug || 'category';
     }
 
+    function escapeHtml(text) {
+        return (text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function extractPromptCardsFromMarkdown(markdown) {
+        const cards = [];
+        const lines = (markdown || '').split(/\r?\n/);
+        let inPromptSection = false;
+        let currentCategory = '未分类';
+        let currentPrompt = null;
+
+        function finishCurrentPrompt() {
+            if (!currentPrompt) return;
+            const rawBody = currentPrompt.lines.join('\n').trim();
+            const imageMatch = rawBody.match(/!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/);
+            const codeMatch = rawBody.match(/```(?:[\w-]+)?\n([\s\S]*?)```/);
+
+            let description = '';
+            for (const line of currentPrompt.lines) {
+                const text = line.trim();
+                if (!text) continue;
+                if (text.startsWith('![')) continue;
+                if (text.startsWith('```')) continue;
+                if (text.startsWith('|')) continue;
+                description = text.replace(/^[-*]\s*/, '');
+                break;
+            }
+
+            const promptText = (codeMatch && codeMatch[1] ? codeMatch[1] : '').trim();
+            const previewText = promptText || description || '暂无提示词内容';
+            cards.push({
+                id: 'prompt-' + (cards.length + 1),
+                title: currentPrompt.title,
+                category: currentPrompt.category || '未分类',
+                image: imageMatch ? imageMatch[1] : '',
+                description: description || '暂无说明',
+                promptText: previewText,
+                promptPreview: previewText.slice(0, 420)
+            });
+            currentPrompt = null;
+        }
+
+        lines.forEach((line) => {
+            if (/^##\s+提示词合集/.test(line)) {
+                inPromptSection = true;
+                return;
+            }
+            if (inPromptSection && /^##\s+/.test(line)) {
+                finishCurrentPrompt();
+                inPromptSection = false;
+                return;
+            }
+            if (!inPromptSection) return;
+
+            const categoryMatch = line.match(/^###\s+(.+)/);
+            if (categoryMatch) {
+                finishCurrentPrompt();
+                currentCategory = normalizeCategoryName(categoryMatch[1]);
+                return;
+            }
+
+            const titleMatch = line.match(/^####\s+(.+)/);
+            if (titleMatch) {
+                finishCurrentPrompt();
+                currentPrompt = {
+                    title: titleMatch[1].trim(),
+                    category: currentCategory,
+                    lines: []
+                };
+                return;
+            }
+
+            if (currentPrompt) currentPrompt.lines.push(line);
+        });
+
+        finishCurrentPrompt();
+        return cards;
+    }
+
+    function renderPromptBoardCards(cards) {
+        if (!promptBoardGridEl || !promptBoardEmptyEl) return;
+
+        if (!cards.length) {
+            promptBoardGridEl.innerHTML = '';
+            promptBoardEmptyEl.hidden = false;
+            return;
+        }
+
+        promptBoardEmptyEl.hidden = true;
+        promptBoardGridEl.innerHTML = cards.map((item, idx) => {
+            const imageHtml = item.image
+                ? '<img class="prompt-item-image" loading="lazy" decoding="async" src="' + escapeHtml(item.image) + '" alt="' + escapeHtml(item.title) + '">'
+                : '<div class="prompt-item-image prompt-item-image-placeholder">暂无预览图</div>';
+
+            return (
+                '<article class="prompt-item-card">' +
+                    '<span class="prompt-item-badge">精选</span>' +
+                    '<div class="prompt-item-meta"><span>分类 ' + escapeHtml(item.category) + '</span><span>#' + String(idx + 1) + '</span></div>' +
+                    '<h3 class="prompt-item-title">' + escapeHtml(item.title) + '</h3>' +
+                    imageHtml +
+                    '<p class="prompt-item-desc">' + escapeHtml(item.description) + '</p>' +
+                    '<div class="prompt-item-code-box">' +
+                        '<div class="prompt-item-code-head"><span>提示词</span><button type="button" class="prompt-item-copy" data-prompt-id="' + escapeHtml(item.id) + '">复制</button></div>' +
+                        '<pre>' + escapeHtml(item.promptPreview) + '</pre>' +
+                    '</div>' +
+                '</article>'
+            );
+        }).join('');
+
+        promptBoardGridEl.querySelectorAll('.prompt-item-copy').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const id = button.getAttribute('data-prompt-id') || '';
+                const target = cards.find((item) => item.id === id);
+                if (!target) return;
+                try {
+                    await copyTextToClipboard(target.promptText);
+                    button.textContent = '已复制';
+                    setTimeout(() => {
+                        button.textContent = '复制';
+                    }, 1200);
+                } catch (error) {
+                    button.textContent = '失败';
+                    setTimeout(() => {
+                        button.textContent = '复制';
+                    }, 1200);
+                }
+            });
+        });
+    }
+
+    function renderPromptBoardFilters(cards) {
+        if (!promptBoardFiltersEl) return;
+        const counts = new Map();
+        cards.forEach((item) => {
+            counts.set(item.category, (counts.get(item.category) || 0) + 1);
+        });
+
+        const categories = Array.from(counts.keys());
+        promptBoardFiltersEl.innerHTML = '';
+
+        const allButton = document.createElement('button');
+        allButton.type = 'button';
+        allButton.className = 'prompt-board-filter-btn';
+        allButton.dataset.category = 'all';
+        allButton.textContent = '全部';
+        allButton.addEventListener('click', () => {
+            promptBoardState.activeCategory = 'all';
+            applyPromptBoardFilters();
+        });
+        promptBoardFiltersEl.appendChild(allButton);
+
+        categories.forEach((category) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'prompt-board-filter-btn';
+            button.dataset.category = category;
+            button.textContent = category + ' (' + String(counts.get(category)) + ')';
+            button.addEventListener('click', () => {
+                promptBoardState.activeCategory = category;
+                applyPromptBoardFilters();
+            });
+            promptBoardFiltersEl.appendChild(button);
+        });
+    }
+
+    function applyPromptBoardFilters() {
+        const all = promptBoardState.all || [];
+        const keyword = (promptBoardState.keyword || '').toLowerCase().trim();
+        const category = promptBoardState.activeCategory || 'all';
+
+        const filtered = all.filter((item) => {
+            const matchCategory = category === 'all' || item.category === category;
+            if (!matchCategory) return false;
+            if (!keyword) return true;
+            const source = [item.title, item.category, item.description, item.promptText].join(' ').toLowerCase();
+            return source.includes(keyword);
+        });
+
+        if (promptBoardTotalEl) {
+            promptBoardTotalEl.textContent = '总计：' + String(filtered.length);
+        }
+
+        if (promptBoardFiltersEl) {
+            promptBoardFiltersEl.querySelectorAll('.prompt-board-filter-btn').forEach((button) => {
+                const active = (button.dataset.category || '') === category;
+                button.classList.toggle('is-active', active);
+            });
+        }
+
+        renderPromptBoardCards(filtered);
+    }
+
+    function setupPromptBoardInteractions() {
+        if (promptBoardSearchEl) {
+            promptBoardSearchEl.addEventListener('input', () => {
+                promptBoardState.keyword = promptBoardSearchEl.value || '';
+                applyPromptBoardFilters();
+            });
+        }
+        if (promptBoardClearEl) {
+            promptBoardClearEl.addEventListener('click', () => {
+                promptBoardState.activeCategory = 'all';
+                promptBoardState.keyword = '';
+                if (promptBoardSearchEl) promptBoardSearchEl.value = '';
+                applyPromptBoardFilters();
+            });
+        }
+    }
+
+    function renderPromptBoardFromMarkdown(markdown) {
+        const cards = extractPromptCardsFromMarkdown(markdown);
+        promptBoardState.all = cards;
+        promptBoardState.activeCategory = 'all';
+        promptBoardState.keyword = '';
+        if (promptBoardSearchEl) promptBoardSearchEl.value = '';
+        renderPromptBoardFilters(cards);
+        applyPromptBoardFilters();
+    }
+
     function extractPromptCategoriesFromMarkdown(markdown) {
         const categories = [];
         const lines = (markdown || '').split(/\r?\n/);
@@ -552,6 +807,7 @@
             const html = marked.parse(markdown);
             const safeHtml = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
             readmeContentEl.innerHTML = safeHtml;
+            renderPromptBoardFromMarkdown(markdown);
             absolutizeLinksAndMakeExternal(readmeContentEl);
             addLazyLoadingToImages(readmeContentEl);
             setupPromptCategoryFilter(readmeContentEl, extractPromptCategoriesFromMarkdown(markdown));
@@ -564,6 +820,9 @@
             const errorMsg = error && error.message ? error.message : String(error);
             readmeStatusEl.textContent = '加载失败：' + errorMsg;
             readmeContentEl.textContent = 'README 渲染失败，请点击“打开原始文件”直接查看。';
+            promptBoardState.all = [];
+            renderPromptBoardFilters([]);
+            applyPromptBoardFilters();
             if (readmeLoadingEl) readmeLoadingEl.hidden = true;
             setReadmeRetryVisible(true);
             if (promptFilterEl) promptFilterEl.hidden = true;
@@ -613,6 +872,7 @@
         setupAnchorScroll();
         setupActiveNav();
         setupBackToTop();
+        setupPromptBoardInteractions();
         if (readmeRetryBtnEl) {
             readmeRetryBtnEl.addEventListener('click', () => {
                 loadReadme();
