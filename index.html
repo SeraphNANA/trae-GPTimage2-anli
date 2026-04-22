@@ -60,7 +60,7 @@
             <div class="card readme-card">
                 <div class="readme-meta">
                     <span class="readme-status" id="readme-status">正在加载 README.md…</span>
-                    <a class="readme-link" href="README.md" target="_blank" rel="noreferrer">打开原始 README</a>
+                    <a class="readme-link" id="readme-raw-link" href="README.md" target="_blank" rel="noreferrer">打开原始 README</a>
                 </div>
                 <article id="readme-content" class="markdown-body" aria-live="polite"></article>
             </div>
@@ -109,15 +109,31 @@ function addLazyLoadingToImages(containerEl) {
 async function loadReadme() {
     const statusEl = document.getElementById('readme-status');
     const contentEl = document.getElementById('readme-content');
+    const rawLinkEl = document.getElementById('readme-raw-link');
 
     try {
         if (!window.marked) throw new Error('marked.js 加载失败');
         if (!window.DOMPurify) throw new Error('DOMPurify 加载失败');
         marked.setOptions({ gfm: true, breaks: true });
 
-        const res = await fetch('README.md', { cache: 'no-store' });
-        if (!res.ok) throw new Error('README.md 读取失败：' + res.status);
-        const md = await res.text();
+        const rawReadmeUrl = 'https://raw.githubusercontent.com/xianyu110/awesome-gptimage2/main/README.md';
+        const candidates = ['README.md', rawReadmeUrl];
+        let md = null;
+        let lastErr = null;
+
+        for (const url of candidates) {
+            try {
+                const res = await fetch(url, { cache: 'no-store' });
+                if (!res.ok) throw new Error(String(res.status));
+                md = await res.text();
+                if (rawLinkEl) rawLinkEl.href = url;
+                break;
+            } catch (e) {
+                lastErr = e;
+            }
+        }
+
+        if (md == null) throw lastErr || new Error('README 获取失败');
         const html = marked.parse(md);
         const safeHtml = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
         contentEl.innerHTML = safeHtml;
