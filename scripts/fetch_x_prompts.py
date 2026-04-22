@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
+import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 from urllib import error, request
 
 
@@ -102,12 +104,91 @@ def post_chat_completion(
     return json.loads(body)
 
 
+def should_retry_error(message: str) -> bool:
+    text = (message or "").lower()
+    retry_signals = [
+        "heavy usage",
+        "try again later",
+        "\"code\":8",
+        "http 429",
+        "http 500",
+        "http 503",
+        "timeout",
+        "temporarily unavailable",
+    ]
+    return any(signal in text for signal in retry_signals)
+
+
+def call_with_retry_and_fallback(
+    base_url: str,
+    api_key: str,
+    models: List[str],
+    query: str,
+    lookback_hours: int,
+    max_items: int,
+    timeout_seconds: int,
+    max_retries: int,
+    retry_seconds: int,
+) -> Tuple[Dict[str, Any], str]:
+    last_error: Exception | None = None
+    retries = max(0, max_retries)
+    base_delay = max(1, retry_seconds)
+
+    for model in models:
+        for attempt in range(retries + 1):
+            try:
+                resp = post_chat_completion(
+                    base_url=base_url,
+                    api_key=api_key,
+                    model=model,
+                    query=query,
+                    lookback_hours=lookback_hours,
+                    max_items=max_items,
+                    timeout_seconds=timeout_seconds,
+                )
+                return resp, model
+            except error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="ignore")
+                msg = f"HTTP {exc.code}: {body[:700]}"
+                last_error = RuntimeError(msg)
+                can_retry = should_retry_error(msg)
+            except Exception as exc:  # pragma: no cover
+                msg = str(exc)
+                last_error = exc
+                can_retry = should_retry_error(msg)
+
+            if attempt < retries and can_retry:
+                delay = base_delay * (2 ** attempt)
+                print(
+                    f"Retrying model={model} attempt={attempt + 1}/{retries} "
+                    f"after {delay}s due to transient error...",
+                    file=sys.stderr,
+                )
+                time.sleep(delay)
+                continue
+
+            # stop trying this model if error is non-retryable or retries exhausted
+            break
+
+    raise RuntimeError(str(last_error) if last_error else "APIPRO request failed")
+
+
 def extract_message_content(resp: Dict[str, Any]) -> str:
     choices = resp.get("choices", [])
     if not choices:
         raise ValueError("No choices in completion response")
     message = choices[0].get("message", {})
     content = message.get("content", "")
+    if isinstance(content, list):
+        # Some providers return structured message parts.
+        text_parts = []
+        for part in content:
+            if isinstance(part, dict):
+                if isinstance(part.get("text"), str):
+                    text_parts.append(part["text"])
+                elif part.get("type") == "text" and isinstance(part.get("content"), str):
+                    text_parts.append(part["content"])
+        content = "\n".join(text_parts).strip()
     if not isinstance(content, str) or not content.strip():
         raise ValueError("No message content in completion response")
     return content.strip()
@@ -123,6 +204,26 @@ def strip_code_fence(content: str) -> str:
             lines = lines[:-1]
         return "\n".join(lines).strip()
     return text
+
+
+def parse_json_flexible(content: str) -> Dict[str, Any]:
+    candidates: List[str] = [strip_code_fence(content)]
+
+    # Try extracting the first JSON object block if model wraps extra text.
+    match = re.search(r"\{[\s\S]*\}", content)
+    if match:
+        candidates.append(match.group(0).strip())
+
+    last_error: Exception | None = None
+    for text in candidates:
+        try:
+            obj = json.loads(text)
+            if isinstance(obj, dict):
+                return obj
+            raise ValueError("Model content is not a JSON object")
+        except Exception as exc:  # pragma: no cover
+            last_error = exc
+    raise ValueError(f"Invalid model output JSON: {last_error}")
 
 
 def normalize_item(item: Dict[str, Any]) -> Dict[str, str]:
@@ -184,6 +285,7 @@ def main() -> int:
 
     base_url = normalize_base_url(os.getenv("APIPRO_BASE_URL", "http://apipro.maynor1024.live/v1"))
     model = os.getenv("APIPRO_MODEL", "grok-4.1-fast").strip() or "grok-4.1-fast"
+    fallback_models_raw = os.getenv("APIPRO_FALLBACK_MODELS", "").strip()
     query = os.getenv(
         "APIPRO_QUERY",
         "(gptimage2 OR gpt-image-2 OR \"gpt image 2\") (prompt OR 提示词)",
@@ -191,39 +293,46 @@ def main() -> int:
     lookback_hours = env_int("APIPRO_LOOKBACK_HOURS", 24, 1, 168)
     max_items = env_int("APIPRO_MAX_ITEMS", 60, 1, 200)
     timeout_seconds = env_int("APIPRO_TIMEOUT_SECONDS", 90, 10, 600)
+    max_retries = env_int("APIPRO_MAX_RETRIES", 4, 0, 10)
+    retry_seconds = env_int("APIPRO_RETRY_SECONDS", 8, 1, 60)
     output_file = os.getenv("APIPRO_OUTPUT_FILE", "data/latest-prompts.json").strip()
+    model_candidates = [model]
+    if fallback_models_raw:
+        extras = [m.strip() for m in fallback_models_raw.split(",") if m.strip()]
+        for item in extras:
+            if item not in model_candidates:
+                model_candidates.append(item)
 
     try:
-        resp = post_chat_completion(
+        resp, used_model = call_with_retry_and_fallback(
             base_url=base_url,
             api_key=api_key,
-            model=model,
+            models=model_candidates,
             query=query,
             lookback_hours=lookback_hours,
             max_items=max_items,
             timeout_seconds=timeout_seconds,
+            max_retries=max_retries,
+            retry_seconds=retry_seconds,
         )
-    except error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="ignore")
-        print(f"HTTP {exc.code}: {body[:500]}", file=sys.stderr)
-        return 1
     except Exception as exc:  # pragma: no cover
         print(str(exc), file=sys.stderr)
         return 1
 
     try:
         content = extract_message_content(resp)
-        parsed = json.loads(strip_code_fence(content))
-        if not isinstance(parsed, dict):
-            raise ValueError("Model content is not a JSON object")
+        parsed = parse_json_flexible(content)
     except Exception as exc:
+        preview = (content[:500] if "content" in locals() else "").replace("\n", "\\n")
         print(f"Invalid model output JSON: {exc}", file=sys.stderr)
+        if preview:
+            print(f"Raw content preview: {preview}", file=sys.stderr)
         return 1
 
     output = normalize_output(
         parsed=parsed,
         base_url=base_url,
-        model=model,
+        model=used_model,
         query=query,
         lookback_hours=lookback_hours,
     )

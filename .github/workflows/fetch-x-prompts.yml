@@ -6,6 +6,10 @@ on:
     - cron: "10 1 * * *"
   workflow_dispatch:
 
+env:
+  # Opt in early to avoid Node 20 runtime deprecation issues.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: write
 
@@ -18,18 +22,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+
+      - name: Preflight secrets check
+        env:
+          APIPRO_API_KEY: ${{ secrets.APIPRO_API_KEY }}
+        run: |
+          if [ -z "${APIPRO_API_KEY}" ]; then
+            echo "Missing required repository secret: APIPRO_API_KEY"
+            exit 1
+          fi
 
       - name: Fetch latest prompts from X
         env:
           APIPRO_API_KEY: ${{ secrets.APIPRO_API_KEY }}
           APIPRO_BASE_URL: http://apipro.maynor1024.live/v1
           APIPRO_MODEL: grok-4.1-fast
+          # Optional model fallback list, comma separated:
+          # APIPRO_FALLBACK_MODELS: "grok-4.1, gpt-4o-mini"
+          APIPRO_MAX_RETRIES: "5"
+          APIPRO_RETRY_SECONDS: "10"
           # Optional overrides:
           # APIPRO_QUERY: '(gptimage2 OR gpt-image-2) (prompt OR 提示词)'
           # APIPRO_LOOKBACK_HOURS: '24'
