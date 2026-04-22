@@ -133,8 +133,10 @@ def call_with_retry_and_fallback(
     last_error: Exception | None = None
     retries = max(0, max_retries)
     base_delay = max(1, retry_seconds)
+    print(f"Model chain: {', '.join(models)}", file=sys.stderr)
 
     for model in models:
+        print(f"Trying model={model}", file=sys.stderr)
         for attempt in range(retries + 1):
             try:
                 resp = post_chat_completion(
@@ -168,6 +170,10 @@ def call_with_retry_and_fallback(
                 continue
 
             # stop trying this model if error is non-retryable or retries exhausted
+            print(
+                f"Model failed: {model}; reason={msg[:180]}; trying next fallback if available.",
+                file=sys.stderr,
+            )
             break
 
     raise RuntimeError(str(last_error) if last_error else "APIPRO request failed")

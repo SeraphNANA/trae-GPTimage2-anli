@@ -57,6 +57,8 @@ jobs:
           # APIPRO_MAX_ITEMS: '60'
           APIPRO_OUTPUT_FILE: data/latest-prompts.json
         run: |
+          echo "APIPRO_MODEL=${APIPRO_MODEL}"
+          echo "APIPRO_FALLBACK_MODELS=${APIPRO_FALLBACK_MODELS}"
           python scripts/fetch_x_prompts.py
 
       - name: Commit and push if changed
