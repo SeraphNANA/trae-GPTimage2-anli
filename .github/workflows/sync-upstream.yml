@@ -1,0 +1,50 @@
+name: Sync Upstream Content
+
+on:
+  schedule:
+    # UTC 02:00 = Beijing 10:00
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/xianyu110/awesome-gptimage2.git
+          git fetch upstream
+
+      - name: Sync content files
+        run: |
+          # Sync README.md
+          git checkout upstream/main -- README.md
+          # Sync data directory
+          git checkout upstream/main -- data/
+          # Sync scripts directory (optional, for reference)
+          git checkout upstream/main -- scripts/
+
+      - name: Commit and push if changed
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git add README.md data/ scripts/
+          git commit -m "chore: sync content from upstream ($(date -u +'%Y-%m-%d'))"
+          git push
