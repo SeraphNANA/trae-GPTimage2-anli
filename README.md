@@ -963,7 +963,9 @@ GPTImage2 模型五种使用方法：
 
 <div align="center">
 
-**如果觉得有用，给个 Star 吧！**
+**如果觉得有用，给个原作者个 Star 吧！**
+致谢原作者：xianyu110
+原作地址：https://github.com/xianyu110/awesome-gptimage2
 
 Made with GPT-Image-2 | Last updated: 2026-04-22
 
