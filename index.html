@@ -648,7 +648,7 @@
             background: var(--bg-card);
             border: 1px solid var(--border-subtle);
             border-radius: 20px;
-            padding: 2rem;
+            padding: 1.5rem;
         }
 
         .readme-meta {
@@ -714,25 +714,43 @@
 
         .markdown-body {
             color: var(--text-secondary);
-            line-height: 1.8;
+            line-height: 1.6;
         }
 
         .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
             color: var(--text-primary);
-            margin-top: 2rem;
-            margin-bottom: 1rem;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .markdown-body h1:first-of-type {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: none;
         }
 
         .markdown-body h1 {
-            font-size: 2rem;
-            border-bottom: 2px solid var(--border-subtle);
+            font-size: 1.75rem;
+            border-bottom: 2px solid var(--accent-cyan);
             padding-bottom: 0.5rem;
             color: var(--accent-cyan);
         }
 
         .markdown-body h2 {
-            font-size: 1.5rem;
+            font-size: 1.35rem;
             color: var(--accent-purple);
+            border-top: 1px solid var(--accent-purple);
+        }
+
+        .markdown-body h3 {
+            font-size: 1.15rem;
+            color: var(--accent-pink);
+        }
+
+        .markdown-body p {
+            margin-bottom: 0.75rem;
         }
 
         .markdown-body pre {
@@ -754,6 +772,16 @@
             max-width: 100%;
             border-radius: 12px;
             margin: 1rem 0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .markdown-body ul {
+            margin-bottom: 0.75rem;
+            padding-left: 1.5rem;
+        }
+
+        .markdown-body li {
+            margin-bottom: 0.3rem;
         }
 
         .copy-code-btn {
@@ -1015,6 +1043,7 @@ const marked = {
             .replace(/\*(.*)\*/gim, '<em>$1</em>')
             .replace(/`([^`]+)`/gim, '<code>$1</code>')
             .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
+            .replace(/!\[([^\]]+)\]\(([^)]+)\)/gim, '<img src="$2" alt="$1">')
             .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
             .replace(/^\* (.*$)/gim, '<li>$1</li>')
             .replace(/^- (.*$)/gim, '<li>$1</li>')
