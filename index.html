@@ -1084,7 +1084,7 @@ const marked = {
             .replace(/```text\n([\s\S]*?)```/gim, function(match, content) {
                 // 清理内容中的首尾空白
                 const cleanContent = content.trim();
-                return '<div class="prompt-card"><div class="prompt-card-label">提示词</div><div class="prompt-card-content">' + cleanContent + '</div><button class="copy-code-btn" onclick="copyTextToClipboard(this.previousElementSibling.textContent)">复制</button></div>';
+                return '<div class="prompt-card"><div class="prompt-card-label">提示词</div><div class="prompt-card-content">' + cleanContent + '</div><button class="copy-code-btn" data-prompt-text="' + cleanContent.replace(/"/g, '&quot;') + '">复制</button></div>';
             })
             .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>');
         
@@ -1192,6 +1192,25 @@ const DOMPurify = {
             });
             preEl.style.position = 'relative';
             preEl.appendChild(button);
+        });
+    }
+
+    function attachPromptCardCopyButtons(containerEl) {
+        containerEl.querySelectorAll('.prompt-card .copy-code-btn').forEach((button) => {
+            if (button._hasCopyListener) return;
+            button._hasCopyListener = true;
+            button.addEventListener('click', async () => {
+                const text = button.getAttribute('data-prompt-text') || '';
+                try {
+                    await copyTextToClipboard(text);
+                    button.textContent = '已复制';
+                    button.classList.add('copied');
+                    setTimeout(() => { button.textContent = '复制'; button.classList.remove('copied'); }, 1200);
+                } catch (error) {
+                    button.textContent = '失败';
+                    setTimeout(() => { button.textContent = '复制'; }, 1200);
+                }
+            });
         });
     }
 
@@ -1392,6 +1411,7 @@ const DOMPurify = {
                 img.referrerPolicy = 'no-referrer';
             });
             attachCopyButtons(readmeContentEl);
+            attachPromptCardCopyButtons(readmeContentEl);
             readmeStatusEl.textContent = '加载成功：内容已与仓库同步';
             if (readmeLoadingEl) readmeLoadingEl.hidden = true;
             updateClock();
