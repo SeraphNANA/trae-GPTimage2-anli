@@ -1078,7 +1078,18 @@
 const marked = {
     parse: function(text) {
         if (!text) return '';
+        
+        // 先处理代码块（避免被后续换行处理影响）
         let html = text
+            .replace(/```text\n([\s\S]*?)```/gim, function(match, content) {
+                // 清理内容中的首尾空白
+                const cleanContent = content.trim();
+                return '<div class="prompt-card"><div class="prompt-card-label">提示词</div><div class="prompt-card-content">' + cleanContent + '</div><button class="copy-code-btn" onclick="copyTextToClipboard(this.previousElementSibling.textContent)">复制</button></div>';
+            })
+            .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>');
+        
+        // 处理其他Markdown语法
+        html = html
             .replace(/^#### (\d+\.\d+ .*$)/gim, '<div class="prompt-card-header">$1</div>')
             .replace(/^### (.*$)/gim, '<h3>$1</h3>')
             .replace(/^## (.*$)/gim, '<h2>$1</h2>')
@@ -1086,14 +1097,13 @@ const marked = {
             .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
             .replace(/\*(.*)\*/gim, '<em>$1</em>')
             .replace(/`([^`]+)`/gim, '<code>$1</code>')
-            .replace(/```text\n([\s\S]*?)```/gim, '<div class="prompt-card"><div class="prompt-card-label">提示词</div><div class="prompt-card-content">$1</div><button class="copy-code-btn" onclick="copyTextToClipboard(this.previousElementSibling.textContent)">复制</button></div>')
-            .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
             .replace(/!\[([^\]]+)\]\(([^)]+)\)/gim, '<img src="$2" alt="$1">')
             .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
             .replace(/^\* (.*$)/gim, '<li>$1</li>')
             .replace(/^- (.*$)/gim, '<li>$1</li>')
             .replace(/(<li>.*<\/li>\n?)+/gim, '<ul>$&</ul>')
             .replace(/\n/gim, '<br>');
+        
         return html;
     }
 };
