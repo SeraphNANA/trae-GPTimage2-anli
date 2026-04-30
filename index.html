@@ -993,8 +993,7 @@
 
     <section id="readme" class="section">
         <div class="section-head">
-            <h2 class="section-title">完整 README</h2>
-            <a class="readme-raw-link" id="readme-raw-link" href="README.md" target="_blank" rel="noreferrer">打开原始文件</a>
+            <h2 class="section-title">完整画廊</h2>
         </div>
 
         <div class="readme-card">
@@ -1323,7 +1322,9 @@ const DOMPurify = {
                 } catch (error) { lastError = error; }
             }
             if (markdown == null) throw lastError || new Error('README 获取失败');
-            const html = marked.parse(markdown);
+            const corePrincipleIndex = markdown.indexOf('## 核心原则');
+            const displayMarkdown = corePrincipleIndex !== -1 ? markdown.substring(corePrincipleIndex) : markdown;
+            const html = marked.parse(displayMarkdown);
             const safeHtml = DOMPurify.sanitize(html);
             readmeContentEl.innerHTML = safeHtml;
             renderPromptBoardFromMarkdown(markdown);
@@ -1344,7 +1345,7 @@ const DOMPurify = {
             updateClock();
         } catch (error) {
             readmeStatusEl.textContent = '加载失败：' + (error.message || String(error));
-            readmeContentEl.textContent = 'README 渲染失败，请点击"打开原始文件"直接查看。';
+            readmeContentEl.textContent = 'README 渲染失败，请刷新页面重试。';
             promptBoardState.all = [];
             renderPromptBoardFilters([]);
             applyPromptBoardFilters();
