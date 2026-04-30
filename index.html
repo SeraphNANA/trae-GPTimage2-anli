@@ -1323,7 +1323,7 @@ const DOMPurify = {
             }
             if (markdown == null) throw lastError || new Error('README 获取失败');
             const promptCollectionIndex = markdown.indexOf('## 提示词合集');
-            const thanksIndex = markdown.indexOf('---\n\n如果觉得有用');
+            const thanksIndex = markdown.indexOf('\n---\n\n<div align="center">');
             let displayMarkdown = promptCollectionIndex !== -1 ? markdown.substring(promptCollectionIndex) : markdown;
             if (thanksIndex !== -1 && thanksIndex > promptCollectionIndex) {
                 displayMarkdown = displayMarkdown.substring(0, thanksIndex - promptCollectionIndex);
