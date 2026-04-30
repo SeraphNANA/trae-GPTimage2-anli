@@ -776,13 +776,7 @@
             margin: 0.4rem auto;
         }
 
-        .markdown-body p:has(> img:only-child) {
-            display: flex;
-            justify-content: center;
-            margin: 0.5rem 0;
-        }
-
-        .markdown-body p:has(> img:only-child) img {
+        .markdown-body p img {
             margin: 0;
             padding: 4px;
             background: rgba(255, 255, 255, 0.03);
@@ -792,7 +786,7 @@
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
-        .markdown-body p:has(> img:only-child) img:hover {
+        .markdown-body p img:hover {
             border-color: rgba(0, 212, 255, 0.4);
             box-shadow: 0 0 20px rgba(0, 212, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.3);
             background: rgba(0, 212, 255, 0.03);
