@@ -1031,7 +1031,7 @@
 </main>
 
 <footer class="site-footer">
-    <p>Made for GPT-Image-2 Creators · <span id="footer-date">2026-04-22</span></p>
+    <p>Made with GPT-Image-2 | Last updated: <span id="footer-date">2026/4/30</span></p>
     <p>内容整合自实测文章与开源社区经验，欢迎补充与 PR。</p>
 </footer>
 
@@ -1090,7 +1090,7 @@ const DOMPurify = {
         const now = new Date();
         readmeClockEl.textContent = '最后刷新：' + now.toLocaleString('zh-CN', { hour12: false });
         const footerDateEl = document.getElementById('footer-date');
-        if (footerDateEl) footerDateEl.textContent = now.toISOString().slice(0, 10);
+        if (footerDateEl) footerDateEl.textContent = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}`;
     }
 
     function setReadmeRetryVisible(visible) {
@@ -1322,8 +1322,12 @@ const DOMPurify = {
                 } catch (error) { lastError = error; }
             }
             if (markdown == null) throw lastError || new Error('README 获取失败');
-            const corePrincipleIndex = markdown.indexOf('## 核心原则');
-            const displayMarkdown = corePrincipleIndex !== -1 ? markdown.substring(corePrincipleIndex) : markdown;
+            const promptCollectionIndex = markdown.indexOf('## 提示词合集');
+            const thanksIndex = markdown.indexOf('---\n\n如果觉得有用');
+            let displayMarkdown = promptCollectionIndex !== -1 ? markdown.substring(promptCollectionIndex) : markdown;
+            if (thanksIndex !== -1 && thanksIndex > promptCollectionIndex) {
+                displayMarkdown = displayMarkdown.substring(0, thanksIndex - promptCollectionIndex);
+            }
             const html = marked.parse(displayMarkdown);
             const safeHtml = DOMPurify.sanitize(html);
             readmeContentEl.innerHTML = safeHtml;
