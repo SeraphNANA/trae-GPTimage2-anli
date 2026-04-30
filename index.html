@@ -792,6 +792,42 @@
             margin: 0.6rem 0;
         }
 
+        .prompt-card-header {
+            background: rgba(157, 78, 221, 0.15);
+            border: 1px solid var(--accent-purple);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin: 0.75rem 0 0.5rem;
+            color: var(--accent-purple);
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .prompt-card {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            position: relative;
+        }
+
+        .prompt-card-label {
+            color: var(--accent-cyan);
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .prompt-card-content {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            font-size: 0.95rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
         .copy-code-btn {
             position: absolute;
             top: 0.5rem;
@@ -1043,12 +1079,14 @@ const marked = {
     parse: function(text) {
         if (!text) return '';
         let html = text
+            .replace(/^#### (\d+\.\d+ .*$)/gim, '<div class="prompt-card-header">$1</div>')
             .replace(/^### (.*$)/gim, '<h3>$1</h3>')
             .replace(/^## (.*$)/gim, '<h2>$1</h2>')
             .replace(/^# (.*$)/gim, '<h1>$1</h1>')
             .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
             .replace(/\*(.*)\*/gim, '<em>$1</em>')
             .replace(/`([^`]+)`/gim, '<code>$1</code>')
+            .replace(/```text\n([\s\S]*?)^\`$/gim, '<div class="prompt-card"><div class="prompt-card-label">提示词</div><div class="prompt-card-content">$1</div><button class="copy-code-btn" onclick="copyTextToClipboard(this.previousElementSibling.textContent)">复制</button></div>')
             .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
             .replace(/!\[([^\]]+)\]\(([^)]+)\)/gim, '<img src="$2" alt="$1">')
             .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
